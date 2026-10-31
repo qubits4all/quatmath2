@@ -86,10 +86,13 @@ class Versor(object):
                 if isinstance(angle, ALLOWED_NUMERIC_TYPES):
                     try:
                         axisArray = np.array(axisVec[:3])
+
                         # Normalize the axis vector, so that it's a unit vector
                         axisNorm = la.norm(axisArray)
-                        if axisNorm != 1.0:
-                            axisArray /= axisNorm
+                        if axisNorm != 1.0 and axisNorm != 0.0:
+                            axisArray = axisArray / axisNorm
+                        elif axisNorm == 0.0:
+                            raise ValueError("axisVec must be a non-zero vector.")
 
                         self._axis = axisArray
                         self._halfAngle = angle / 2.0
