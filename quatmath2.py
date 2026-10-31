@@ -122,14 +122,11 @@ class Versor(object):
     @classmethod
     def from_rotation_matrix(cls, rotationMatrix: np.ndarray):
         """
-        Converts a 3x3 rotation matrix to a versor (unit quaternion), using the following formula:
-            q_w = sqrt(1 + R_00 + R_11 + R_22) / 2
-            q_x = (R_21 - R_12) / (4 * q_w)
-            q_y = (R_02 - R_20) / (4 * q_w)
-            q_z = (R_10 - R_01) / (4 * q_w)
+        Converts a 3x3 rotation matrix to a versor (unit quaternion) using one of four formulas, selected based on the
+        maximum of the provided matrix's diagonal components and its trace, ensuring numerical stability.
 
-        Note: This uses the JPL notation for versors (i.e., column-major order), where the imaginary components come
-        first and the real component comes last (i.e., [q_x, q_y, q_z, q_w]^T).
+        Note: This method uses the JPL notation for versors, where the imaginary components come first and the real
+        component comes last (i.e., [q_x, q_y, q_z, q_w]^T).
 
         :param rotationMatrix: a 3x3 rotation matrix, as a 2D NumPy array.
         :return: a `Versor` object representing the same rotation as the provided rotation matrix.
@@ -289,12 +286,12 @@ class Versor(object):
         Converts this versor to a 3x3 rotation matrix, using the following formula:
             `R = (2 * q_w^2 - 1) * I - (2 * q_w) * [q_x, q_y, q_z]_x + 2 * [q_x, q_y, q_z]^T * [q_x, q_y, q_z]`
 
-        Note: This uses the JPL notation for versors (i.e., column-major order), where the imaginary components come
-        first and the real component comes last (i.e., [q_x, q_y, q_z, q_w]^T).
-        - The produced rotation matrix uses the right-hand rule for rotations, and is a proper orthogonal matrix
-        (i.e., it has a determinant of +1).
+        Note: This uses the JPL notation for versors, where the imaginary components come first and the real component
+        comes last (i.e., [q_x, q_y, q_z, q_w]^T).
+        - For a unit quaternion, this method returns a 3x3 proper orthogonal rotation matrix with determinant +1.
+        (For example, a positive 90° rotation about `+x` sends `+y` to `-z`, when applied to a column vector.)
 
-        :return: a 3x3 rotation matrix, as a 2D `numpy.ndarray`, which represents the same rotation as this versor.
+        :return: a 3x3 rotation matrix as a 2D `numpy.ndarray`, which represents the same rotation as this versor.
         """
         imagVec = self.imagVector()
         scaledI = (2 * self._qvec[3] * self._qvec[3] - 1.0) * np.identity(3)
