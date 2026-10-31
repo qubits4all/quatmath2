@@ -295,9 +295,9 @@ class Versor(object):
         multiplication, as follows.
             qMat = q._genLeftMultiplyMatrix()
             r = np.array([[a, b, c]].T
-            newQ = qMat * r  # matrix-vector multiplication
+            newQ = qMat * r     # matrix-vector multiplication
 
-            newQ2 = q x r    # quaternion multiplication
+            newQ2 = q x (r, 0)  # pseudo-code: quaternion "left"-multiplication equivalent
 
             newQ == newQ2
 
@@ -326,9 +326,9 @@ class Versor(object):
         multiplication, as follows.
             qMat = q._genRightMultiplyMatrix()
             r = np.array([[a, b, c]].T
-            newQ = qMat * r  # matrix-vector multiplication
+            newQ = qMat * r     # matrix-vector multiplication
 
-            newQ2 = q x r    # quaternion multiplication
+            newQ2 = (r, 0) x q  # pseudo-code: quaternion "right"-multiplication equivalent
 
             newQ == newQ2
 
