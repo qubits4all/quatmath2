@@ -20,7 +20,7 @@ import numpy.matlib as ml
 # Global Constants:
 
 DEF_THRESHOLD = 1.0e-10  # Default threshold for equality comparisons
-NUMERIC_TYPE = (int, long, float, np.float32, np.float64)
+NUMERIC_TYPE = (int, float, np.float32, np.float64)
 
 
 class Versor(object):
@@ -35,19 +35,20 @@ class Versor(object):
          q_w]      := cos(theta/2)        (& theta is the angle of rotation)
     """
     
-    def __init__(self, \
-                 quatVec = None, \
-                 inVersor = None, \
-                 imagVec = None, \
-                 realPart = None, \
-                 axisVec = None, \
-                 angle = None):
-        
-        self._qvec = None   # quaternion vector form: [q_x, q_y, q_z, q_w]^T
+    def __init__(
+            self,
+            quatVec: np.ndarray | None = None,
+            inVersor: Versor | None = None,
+            imagVec: np.ndarray | None = None,
+            realPart: float | np.float32 | np.float64 | int | None = None,
+            axisVec: np.ndarray = None,
+            angle: float | np.float32 | np.float64 | int | None = None
+    ):
+        self._qvec: np.ndarray | None = None   # quaternion vector form: [q_x, q_y, q_z, q_w]^T
         self._axis = None   # axis of rotation: a 3-tuple
         self._halfAngle = None  # half the rotation angle
         
-        if quatVec != None:
+        if quatVec is not None:
             if all([isinstance(qc, NUMERIC_TYPE) for qc in quatVec]):
                 try:
                     self._qvec = quatVec[:4]
@@ -58,14 +59,14 @@ class Versor(object):
                 raise TypeError("quatVec must have integer or floating-point " \
                         + "components.")
         
-        elif inVersor != None:
-            if inVersor._qvec != None:
+        elif inVersor is not None:
+            if inVersor._qvec is not None:
                 self._qvec = inVersor._qvec[:]
             else:
                 self._halfAngle = inVersor._halfAngle
                 self._axis = np.array(inVersor._axis[:3])
         
-        elif imagVec != None and realPart != None:
+        elif imagVec is not None and realPart is not None:
             # If all components of imagVec are supported numeric types
             if all([isinstance(i, NUMERIC_TYPE) for i in imagVec]):
                 if isinstance(realPart, NUMERIC_TYPE):
@@ -80,7 +81,7 @@ class Versor(object):
                 raise TypeError("imagVec must have integer or floating-point " \
                         + "components.")
         
-        elif axisVec != None and angle != None:
+        elif axisVec is not None and angle is not None:
             if all([isinstance(ac, NUMERIC_TYPE) for ac in axisVec]):
                 if isinstance(angle, NUMERIC_TYPE):
                     try:
@@ -187,14 +188,18 @@ class Versor(object):
 
     @classmethod
     def from_rotation_vector(cls, rotationVector):
-        # TODO: Further check argument validity.
-        rotVec = None
-        if not isinstance(rotationVector, np.ndarray):
-            rotVec = np.array(rotationVector)
-        
-        angle = la.norm(rotVec)
-        axisVec = rotVec / angle
-        
+        rot_vec: np.ndarray = np.asarray(rotationVector, dtype=float)
+
+        if rot_vec.shape != (3,):
+            raise TypeError("rot_vec must be a 3D vector.")
+
+        angle = la.norm(rot_vec)
+
+        if rot_vec[0] != 0 or rot_vec[1] != 0 or rot_vec[2] != 0:
+            axisVec = rot_vec / angle
+        else:
+            return cls.unit()
+
         return Versor.fromAngleAxis(angle, axisVec)
     
     @classmethod
@@ -253,19 +258,19 @@ class Versor(object):
             return np.copy(self._calcAngleAxis()[1])
     
     def imagVector(self):
-        if self._qvec != None:
+        if self._qvec is not None:
             return np.array(self._qvec[:3])
         else:            
             return np.array(self._calcQuatVector()[:3])
     
     def realPart(self):
-        if self._qvec != None:
+        if self._qvec is not None:
             return self._qvec[3]
         else:
             return self._calcQuatVector()[3]
     
     def quatVector(self):
-        if self._qvec != None:
+        if self._qvec is not None:
             return self._qvec[:]
         else:
             return self._calcQuatVector()[:]
@@ -309,21 +314,20 @@ class Versor(object):
         realPart = self.realPart()
         skewM = Versor._genVectorSkewSymmetricMatrix(imagVec)
         diffM = (realPart * np.identity(3)) - skewM
-        qVecH = np.array([self._qvec])
+        qVecH = imagVec.reshape(1, 3)
 
-        return np.bmat([ [diffM],
-                         [-qVecH] ])
+        return np.bmat([[diffM],
+                        [-qVecH]])
                           
     def _calcXiMatrix(self):
         imagVec = self.imagVector()
         realPart = self.realPart()
         skewM = Versor._genVectorSkewSymmetricMatrix(imagVec)
         sumM = (realPart * np.identity(3)) + skewM
-        qVecH = np.array([self._qvec])
+        qVecH = imagVec.reshape(1, 3)
 
-        return np.bmat([ [sumM],
-                         [-qVecH] ])
-
+        return np.bmat([[sumM],
+                        [-qVecH]])
 
     def _calcQuatLeftMultiplyMatrix(self):
         """
@@ -388,7 +392,7 @@ class Versor(object):
 
 
     def _calcAngleAxis(self):
-        if self._halfAngle == None:
+        if self._halfAngle is None:
             imagVec = np.array(self._qvec[:3])
             imagNorm = la.norm(imagVec)
             self._halfAngle = math.atan2(imagNorm, self._qvec[3])
@@ -397,7 +401,7 @@ class Versor(object):
         return (self._halfAngle, self._axis)
     
     def _calcQuatVector(self):
-        if self._qvec == None:
+        if self._qvec is None:
             imagVec = math.sin(self._halfAngle) * self._axis
             realPart = math.cos(self._halfAngle)
             self._qvec = (imagVec[0], imagVec[1], imagVec[2], realPart)
