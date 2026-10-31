@@ -20,7 +20,7 @@ import numpy.linalg as la
 # Global Constants:
 UNIT_TOLERANCE_FLOAT64 = 1.0e-10  # Default threshold for equality comparisons (np.float64 or Python float).
 UNIT_TOLERANCE_FLOAT32 = 1.0e-6   # Default threshold for equality comparisons (np.float32).
-NUMERIC_TYPE = (int, float, np.float32, np.float64)
+ALLOWED_NUMERIC_TYPES = (int, np.integer, float, np.float32, np.float64)
 
 
 class Versor(object):
@@ -48,8 +48,8 @@ class Versor(object):
         self._axis = None   # axis of rotation: a 3-tuple
         self._halfAngle = None  # half the rotation angle
         
-        if quatVec is not None and isinstance(quatVec, np.ndarray):
-            if all([isinstance(qc, NUMERIC_TYPE) for qc in quatVec]):
+        if quatVec is not None and isinstance(quatVec, np.ndarray) and quatVec.shape == (4,):
+            if all([isinstance(qc, ALLOWED_NUMERIC_TYPES) for qc in quatVec]):
                 try:
                     self._qvec = quatVec[:4]
                 
@@ -66,10 +66,10 @@ class Versor(object):
                 self._halfAngle = inVersor._halfAngle
                 self._axis = np.array(inVersor._axis[:3])
         
-        elif imagVec is not None and realPart is not None and isinstance(imagVec, np.ndarray):
+        elif imagVec is not None and realPart is not None and isinstance(imagVec, np.ndarray) and imagVec.shape == (3,):
             # If all components of imagVec are supported numeric types
-            if all([isinstance(i, NUMERIC_TYPE) for i in imagVec]):
-                if isinstance(realPart, NUMERIC_TYPE):
+            if all([isinstance(i, ALLOWED_NUMERIC_TYPES) for i in imagVec]):
+                if isinstance(realPart, ALLOWED_NUMERIC_TYPES):
                     try:
                         self._qvec = np.concatenate((imagVec[:3], [realPart]))
                     except IndexError:
@@ -81,9 +81,9 @@ class Versor(object):
                 raise TypeError("imagVec must have integer or floating-point " \
                         + "components.")
         
-        elif axisVec is not None and angle is not None and isinstance(axisVec, np.ndarray):
-            if all([isinstance(ac, NUMERIC_TYPE) for ac in axisVec]):
-                if isinstance(angle, NUMERIC_TYPE):
+        elif axisVec is not None and angle is not None and isinstance(axisVec, np.ndarray) and axisVec.shape == (3,):
+            if all([isinstance(ac, ALLOWED_NUMERIC_TYPES) for ac in axisVec]):
+                if isinstance(angle, ALLOWED_NUMERIC_TYPES):
                     try:
                         axisArray = np.array(axisVec[:3])
                         # Normalize the axis vector, so that it's a unit vector
@@ -213,23 +213,23 @@ class Versor(object):
     
     @classmethod
     def unit(cls):
-        return Versor(quatVec=(0.0,) * 3 + (1.0,))       # (q_i, q_j, q_k, q_r)
+        return Versor(quatVec=np.array([0.0] * 3 + [1.0]))  # (q_i, q_j, q_k, q_r)
     
     @classmethod
     def zero(cls):
-        return Versor(quatVec=(0.0,) * 4)               # (q_i, q_j, q_k, q_r)
+        return Versor(quatVec=np.array([0.0] * 4))          # (q_i, q_j, q_k, q_r)
     
     @classmethod
     def i(cls):
-        return Versor(quatVec=(1.0,) + (0.0,) * 3)      # (q_i, q_j, q_k, q_r)
+        return Versor(quatVec=np.array([1.0, 0.0, 0.0, 0.0]))  # (q_i, q_j, q_k, q_r)
     
     @classmethod
     def j(cls):
-        return Versor(quatVec=(0.0, 1.0) + (0.0,) * 2)  # (q_i, q_j, q_k, q_r)
+        return Versor(quatVec=np.array([0.0, 1.0, 0.0, 0.0]))  # (q_i, q_j, q_k, q_r)
     
     @classmethod
     def k(cls):
-        return Versor(quatVec=(0.0,) * 2 + (1.0, 0.0))  # (q_i, q_j, q_k, q_r)
+        return Versor(quatVec=np.array([0.0, 0.0, 1.0, 0.0]))  # (q_i, q_j, q_k, q_r)
         
     @classmethod
     def rotationMatrixFromAngleAxis(cls, angle, axisVector):
@@ -392,7 +392,7 @@ class Versor(object):
             imagVec: np.ndarray = np.array(self._qvec[:3])
             imagNorm = la.norm(imagVec)
 
-            if imagVec != np.array([0.0, 0.0, 0.0]):
+            if np.any(imagVec != 0):
                 self._halfAngle = math.atan2(imagNorm, self._qvec[3])
                 self._axis = imagVec / imagNorm
             else:
