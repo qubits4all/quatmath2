@@ -24,7 +24,7 @@ NUMERIC_TYPE = (int, long, float, np.float32, np.float64)
 
 
 class Versor(object):
-    '''
+    """
     This class represents a unit quaternion (a.k.a. a versor), in the JPL
     notation. This notation represents versors as a 4-vector, with the imaginary
     components coming first and the real component listed last, as follows.
@@ -33,7 +33,7 @@ class Versor(object):
          q_y * j,  := sin(theta/2) * a_y
          q_z * k,  := sin(theta/2) * a_z
          q_w]      := cos(theta/2)        (& theta is the angle of rotation)
-    '''
+    """
     
     def __init__(self, \
                  quatVec = None, \
@@ -117,54 +117,79 @@ class Versor(object):
     def fromVectorAndRealParts(cls, imagVector, realPart):
         # TODO: Check argument validity.
         return Versor(imagVec = imagVector, realPart = realPart)
-    
+
     @classmethod
-    def fromRotationMatrix(cls, rotationMatrix):
+    def from_rotation_matrix(cls, rotationMatrix: np.ndarray):
+        """
+        Converts a 3x3 rotation matrix to a versor (unit quaternion), using the following formula:
+            q_w = sqrt(1 + R_00 + R_11 + R_22) / 2
+            q_x = (R_21 - R_12) / (4 * q_w)
+            q_y = (R_02 - R_20) / (4 * q_w)
+            q_z = (R_10 - R_01) / (4 * q_w)
+
+        Note: This uses the JPL notation for versors (i.e., column-major order), where the imaginary components come
+        first and the real component comes last (i.e., [q_x, q_y, q_z, q_w]^T).
+
+        :param rotationMatrix: a 3x3 rotation matrix, as a 2D NumPy array.
+        :return: a `Versor` object representing the same rotation as the provided rotation matrix.
+        """
         trace = rotationMatrix.trace()
+
         diag1 = rotationMatrix[0][0]
         diag2 = rotationMatrix[1][1]
         diag3 = rotationMatrix[2][2]
         maxPivot = max(trace, diag1, diag2, diag3)
-        qvec = None        
-        
+
         # Use the most positive of the diagonal entries and the trace, as a
-        # pivot. This ensures numerical stability.
+        # pivot, ensuring numerical stability:
         if maxPivot == diag1:
             r = math.sqrt(1.0 + diag1 - diag2 - diag3)
             s = 0.5 / r
-            qvec = [ 0.5 * r, \
-                     (rotationMatrix[0][1] + rotationMatrix[1][0]) * s, \
-                     (rotationMatrix[2][0] + rotationMatrix[0][2]) * s, \
-                     (rotationMatrix[2][1] - rotationMatrix[1][2]) * s ]
+
+            x = 0.5 * r
+            y = (rotationMatrix[0][1] + rotationMatrix[1][0]) * s
+            z = (rotationMatrix[2][0] + rotationMatrix[0][2]) * s
+            w = (rotationMatrix[1][2] - rotationMatrix[2][1]) * s
+
+            qvec: np.ndarray = np.array([x, y, z, w])
         elif maxPivot == diag2:
             r = math.sqrt(1.0 + diag2 - diag1 - diag3)
             s = 0.5 / r
-            qvec = [ (rotationMatrix[0][1] + rotationMatrix[1][0]) * s, \
-                     0.5 * r, \
-                     (rotationMatrix[1][2] + rotationMatrix[2][1]) * s, \
-                     (rotationMatrix[0][2] - rotationMatrix[2][0]) * s ]
+
+            x = (rotationMatrix[0][1] + rotationMatrix[1][0]) * s
+            y = 0.5 * r
+            z = (rotationMatrix[1][2] + rotationMatrix[2][1]) * s
+            w = (rotationMatrix[2][0] - rotationMatrix[0][2]) * s
+
+            qvec: np.ndarray = np.array([x, y, z, w])
         elif maxPivot == diag3:
             r = math.sqrt(1.0 + diag3 - diag1 - diag2)
             s = 0.5 / r
-            qvec = [ (rotationMatrix[0][2] + rotationMatrix[2][0]) * s, \
-                     (rotationMatrix[1][2] + rotationMatrix[2][1]) * s, \
-                     0.5 * r, \
-                     (rotationMatrix[1][0] - rotationMatrix[0][1]) * s ]
+
+            x = (rotationMatrix[0][2] + rotationMatrix[2][0]) * s
+            y = (rotationMatrix[1][2] + rotationMatrix[2][1]) * s
+            z = 0.5 * r
+            w = (rotationMatrix[0][1] - rotationMatrix[1][0]) * s
+
+            qvec: np.ndarray = np.array([x, y, z, w])
         else:  # o.w., maxPivot == trace
             r = math.sqrt(1.0 + trace)
             s = 0.5 / r
-            qvec = [ (rotationMatrix[2][1] - rotationMatrix[1][2]) * s, \
-                     (rotationMatrix[0][2] - rotationMatrix[2][0]) * s, \
-                     (rotationMatrix[1][0] - rotationMatrix[0][1]) * s, \
-                     0.5 * r ]
-        
-        return Versor(quatVec = qvec)
+
+            x = (rotationMatrix[1][2] - rotationMatrix[2][1]) * s
+            y = (rotationMatrix[2][0] - rotationMatrix[0][2]) * s
+            z = (rotationMatrix[0][1] - rotationMatrix[1][0]) * s
+            w = 0.5 * r
+
+            qvec: np.ndarray = np.array([x, y, z, w])
+
+        return Versor(quatVec=qvec)
 
     @classmethod
-    def fromRotationVector(cls, rotationVector):
+    def from_rotation_vector(cls, rotationVector):
         # TODO: Further check argument validity.
         rotVec = None
-        if not isinstance(rotationVector, np.array):
+        if not isinstance(rotationVector, np.ndarray):
             rotVec = np.array(rotationVector)
         
         angle = la.norm(rotVec)
@@ -247,13 +272,25 @@ class Versor(object):
     
     def toRotationVector(self):
         return self.rotationAxis() * self.rotationAngle()
-        
+
+    # TODO: Port missing __mul__() and conj() methods from the `quatmath` library.
     def applyRotation(self, vectorToRotate):
         vecQ = Versor.newPureImaginary(vectorToRotate)
-        return (self * vecQ * self).imagVector()
+        return (self * vecQ * self).imagVector()  # FIXME: The right-hand side should be the conjugate of the versor.
         
     # Version: 2.0
-    def toRotationMatrix(self):
+    def to_rotation_matrix(self):
+        """
+        Converts this versor to a 3x3 rotation matrix, using the following formula:
+            `R = (2 * q_w^2 - 1) * I - (2 * q_w) * [q_x, q_y, q_z]_x + 2 * [q_x, q_y, q_z]^T * [q_x, q_y, q_z]`
+
+        Note: This uses the JPL notation for versors (i.e., column-major order), where the imaginary components come
+        first and the real component comes last (i.e., [q_x, q_y, q_z, q_w]^T).
+        - The produced rotation matrix uses the right-hand rule for rotations, and is a proper orthogonal matrix
+        (i.e., it has a determinant of +1).
+
+        :return: a 3x3 rotation matrix, as a 2D `numpy.ndarray`, which represents the same rotation as this versor.
+        """
         imagVec = self.imagVector()
         scaledI = (2 * self._qvec[3] * self._qvec[3] - 1.0) * np.identity(3)
         imagOuter = np.outer(imagVec, imagVec)
@@ -289,7 +326,7 @@ class Versor(object):
 
 
     def _calcQuatLeftMultiplyMatrix(self):
-        '''
+        """
         Generates the quaternion left-multiply matrix for this Versor, which
         when multiplied with a 4-vector quat-vector performs quaternion left-
         multiplication, as follows.
@@ -312,7 +349,7 @@ class Versor(object):
             rotM1 == rotM2
 
         :return: the quaternion left-multiply matrix for this Versor.
-        '''
+        """
         psiM = self._calcPsiMatrix()
         quatVecV = np.array([self._qvec]).T
 
@@ -320,7 +357,7 @@ class Versor(object):
 
     
     def _calcQuatRightMultiplyMatrix(self):
-        '''
+        """
         Generates the quaternion right-multiply matrix for this Versor, which
         when multiplied with a 4-vector quat-vector performs quaternion right-
         multiplication, as follows.
@@ -343,7 +380,7 @@ class Versor(object):
             rotM1 == rotM2
 
         :return: the quaternion right-multiply matrix for this Versor.
-        '''
+        """
         xiM = self._calcXiMatrix()
         quatVecV = np.array([self._qvec]).T
 
@@ -369,7 +406,7 @@ class Versor(object):
 
     @classmethod
     def _genLeftSkewSymmetricMatrix(cls, rotationVector):
-        '''
+        """
         Generates the quaternion left-multiply skew-symmetric matrix, from the
         given rotation vector. This function is often denoted by a capital
         omega in quaternion literature.
@@ -385,7 +422,7 @@ class Versor(object):
 
         where [vec]_X is the cross-product matrix for the vector 'vec', and
               vec^T is the transpose of the vector 'vec'.
-        '''
+        """
         vecSkewM = Versor._genVectorSkewSymmetricMatrix(rotationVector)
         rotVec = np.array([rotationVector]).T
 
@@ -400,7 +437,7 @@ class Versor(object):
 
     @classmethod
     def _genRightSkewSymmetricMatrix(cls, rotationVector):
-        '''
+        """
         Generates the quaternion right-multiply skew-symmetric matrix, from the
         given rotation vector. This function is often denoted by a capital
         lambda in quaternion literature.
@@ -416,7 +453,7 @@ class Versor(object):
 
         where [vec]_X is the cross-product matrix for the vector 'vec', and
               vec^T is the transpose of the vector 'vec'.
-        '''
+        """
         vecSkewM = Versor._genVectorSkewSymmetricMatrix(rotationVector)
         rotVec = np.array([rotationVector]).T
 
@@ -426,6 +463,6 @@ class Versor(object):
 
     @classmethod
     def _genVectorSkewSymmetricMatrix(cls, vector):
-        return np.array([ [ 0, -vector[2], vector[1] ], \
-                          [ vector[2], 0, -vector[0] ], \
-                          [ -vector[1], vector[0], 0 ] ])
+        return np.array([[0, -vector[2], vector[1]],
+                         [vector[2], 0, -vector[0]],
+                         [-vector[1], vector[0], 0]])
