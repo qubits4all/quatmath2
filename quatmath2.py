@@ -10,16 +10,16 @@ class for these purposes.
          
 Copyright 2015 W. Spann Systems Consulting
 """
+from __future__ import annotations
 
 import math
 import numpy as np
 import numpy.linalg as la
-import numpy.matlib as ml
-
+# import numpy.matlib as ml
 
 # Global Constants:
-
-DEF_THRESHOLD = 1.0e-10  # Default threshold for equality comparisons
+UNIT_TOLERANCE_FLOAT64 = 1.0e-10  # Default threshold for equality comparisons (np.float64 or Python float).
+UNIT_TOLERANCE_FLOAT32 = 1.0e-6   # Default threshold for equality comparisons (np.float32).
 NUMERIC_TYPE = (int, float, np.float32, np.float64)
 
 
@@ -48,7 +48,7 @@ class Versor(object):
         self._axis = None   # axis of rotation: a 3-tuple
         self._halfAngle = None  # half the rotation angle
         
-        if quatVec is not None:
+        if quatVec is not None and isinstance(quatVec, np.ndarray):
             if all([isinstance(qc, NUMERIC_TYPE) for qc in quatVec]):
                 try:
                     self._qvec = quatVec[:4]
@@ -66,12 +66,12 @@ class Versor(object):
                 self._halfAngle = inVersor._halfAngle
                 self._axis = np.array(inVersor._axis[:3])
         
-        elif imagVec is not None and realPart is not None:
+        elif imagVec is not None and realPart is not None and isinstance(imagVec, np.ndarray):
             # If all components of imagVec are supported numeric types
             if all([isinstance(i, NUMERIC_TYPE) for i in imagVec]):
                 if isinstance(realPart, NUMERIC_TYPE):
                     try:
-                        self._qvec = imagVec[:3] + [realPart]
+                        self._qvec = np.concatenate((imagVec[:3], [realPart]))
                     except IndexError:
                         raise TypeError( \
                                 "imagVec must be a sequence of length 3.")
@@ -81,7 +81,7 @@ class Versor(object):
                 raise TypeError("imagVec must have integer or floating-point " \
                         + "components.")
         
-        elif axisVec is not None and angle is not None:
+        elif axisVec is not None and angle is not None and isinstance(axisVec, np.ndarray):
             if all([isinstance(ac, NUMERIC_TYPE) for ac in axisVec]):
                 if isinstance(angle, NUMERIC_TYPE):
                     try:
@@ -202,34 +202,34 @@ class Versor(object):
     @classmethod
     def newPureImaginary(cls, imagVector):
         # TODO: Check argument validity.
-        return Versor(imagVec = imagVector[:], realPart = 0.0)
+        return Versor(imagVec=imagVector[:], realPart=0.0)
 
     @classmethod
     def copy(cls, toCopy):
         if isinstance(toCopy, Versor):
-            return Versor(inVersor = Versor)
+            return Versor(inVersor=toCopy)
         else:
-             raise TypeError("toCopy must be a Versor.")
+            raise TypeError("toCopy must be a Versor.")
     
     @classmethod
     def unit(cls):
-        return Versor(quatVec = (0.0,) * 3 + (1.0,))       # (q_i, q_j, q_k, q_r)
+        return Versor(quatVec=(0.0,) * 3 + (1.0,))       # (q_i, q_j, q_k, q_r)
     
     @classmethod
     def zero(cls):
-        return Versor(quatVec = (0.0,) * 4)               # (q_i, q_j, q_k, q_r)
+        return Versor(quatVec=(0.0,) * 4)               # (q_i, q_j, q_k, q_r)
     
     @classmethod
     def i(cls):
-        return Versor(quatVec = (1.0,) + (0.0,) * 3)      # (q_i, q_j, q_k, q_r)
+        return Versor(quatVec=(1.0,) + (0.0,) * 3)      # (q_i, q_j, q_k, q_r)
     
     @classmethod
     def j(cls):
-        return Versor(quatVec = (0.0, 1.0) + (0.0,) * 2)  # (q_i, q_j, q_k, q_r)
+        return Versor(quatVec=(0.0, 1.0) + (0.0,) * 2)  # (q_i, q_j, q_k, q_r)
     
     @classmethod
     def k(cls):
-        return Versor(quatVec = (0.0,) * 2 + (1.0, 0.0))  # (q_i, q_j, q_k, q_r)
+        return Versor(quatVec=(0.0,) * 2 + (1.0, 0.0))  # (q_i, q_j, q_k, q_r)
         
     @classmethod
     def rotationMatrixFromAngleAxis(cls, angle, axisVector):
@@ -387,15 +387,35 @@ class Versor(object):
 
         return np.bmat([ [xiM, quatVecV] ])
 
-
     def _calcAngleAxis(self):
         if self._halfAngle is None:
-            imagVec = np.array(self._qvec[:3])
+            imagVec: np.ndarray = np.array(self._qvec[:3])
             imagNorm = la.norm(imagVec)
-            self._halfAngle = math.atan2(imagNorm, self._qvec[3])
-            self._axis = imagVec / imagNorm
 
-        return (self._halfAngle, self._axis)
+            if imagVec != np.array([0.0, 0.0, 0.0]):
+                self._halfAngle = math.atan2(imagNorm, self._qvec[3])
+                self._axis = imagVec / imagNorm
+            else:
+                w = self._qvec[-1]
+                # Construct a zero rotation vector if one of the two identity versors was detected.
+                if isinstance(w, (int, np.integer)) and (w == 1 or w == -1):
+                    self._halfAngle = 0.0
+                    self._axis = np.array([1.0, 0.0, 0.0])  # note: arbitrary rotation axis choice (x-axis)
+                else:
+                    unit_tolerance = UNIT_TOLERANCE_FLOAT32 if isinstance(w, np.float32) else UNIT_TOLERANCE_FLOAT64
+
+                    # Construct a zero rotation vector if one of the two identity versors was detected.
+                    if math.isclose(abs(w), 1.0, rel_tol=0.0, abs_tol=unit_tolerance):
+                        self._halfAngle = 0.0
+                        self._axis = np.array([1.0, 0.0, 0.0])  # note: arbitrary rotation axis choice (x-axis)
+                    else:
+                        # Either a non-unit quaternion or the zero quaternion. (The latter has no defined rotation.)
+                        raise ValueError(
+                            f"Calculation of angle-axis form requires a unit quaternion (versor), which has a Euclidean"
+                            f" norm of 1.0, but this quaternion's norm is: {abs(w)}."
+                        )
+
+        return self._halfAngle, self._axis
     
     def _calcQuatVector(self):
         if self._qvec is None:
